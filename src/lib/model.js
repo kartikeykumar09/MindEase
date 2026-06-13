@@ -99,12 +99,15 @@ export function parseAnalysis(text) {
 
 /**
  * Low-level call to the local Ollama chat endpoint with JSON-mode formatting.
- * @param {string} system System prompt.
- * @param {string} user   User content.
+ * @param {string} system  System prompt.
+ * @param {string} user    User content.
+ * @param {number} [temperature=0.4]  Sampling temperature. Triage uses 0 for consistency.
+ * @param {number} [maxTokens=256]    Cap on generated tokens — keeps each call short so a small
+ *   local model can't run away and stall a low-powered machine.
  * @returns {Promise<string>} The raw assistant message content.
  * @throws if the model is unreachable or returns a non-OK status.
  */
-async function chat(system, user) {
+async function chat(system, user, temperature = 0.4, maxTokens = 256) {
   const res = await fetch(OLLAMA_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -112,7 +115,9 @@ async function chat(system, user) {
       model: MODEL_TAG,
       format: 'json',
       stream: false,
-      options: { temperature: 0.4 },
+      // keep_alive unloads the model promptly after use to free memory.
+      keep_alive: '2m',
+      options: { temperature, num_predict: maxTokens },
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -130,7 +135,9 @@ async function chat(system, user) {
  * @returns {Promise<{risk: 'none'|'elevated'|'crisis', reason: string}>}
  */
 export async function triage(text) {
-  const raw = await chat(TRIAGE_SYSTEM_PROMPT, text)
+  // temperature 0 — safety classification should be as consistent as possible.
+  // 80 tokens is plenty for {risk, reason} and keeps this fast on small machines.
+  const raw = await chat(TRIAGE_SYSTEM_PROMPT, text, 0, 80)
   return parseTriage(raw)
 }
 
