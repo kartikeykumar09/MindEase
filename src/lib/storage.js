@@ -39,7 +39,7 @@ export function loadEntries() {
 
 /**
  * Persist an entry, returning the saved record (with id + timestamp filled in).
- * @param {{mood: number, text: string, risk?: string, analysis?: Analysis|null}} partial
+ * @param {{mood: number, text: string, risk?: ('none'|'elevated'|'crisis'), analysis?: Analysis|null}} partial
  * @returns {Entry}
  */
 export function saveEntry(partial) {
@@ -70,6 +70,17 @@ export function updateEntry(id, patch) {
   return entries[idx]
 }
 
+/**
+ * Remove a single entry by id (privacy control — the user can erase any check-in).
+ * @param {string} id
+ * @returns {Entry[]} The remaining entries, newest first.
+ */
+export function deleteEntry(id) {
+  const entries = loadEntries().filter((e) => e.id !== id)
+  persist(entries)
+  return entries
+}
+
 /** Remove every stored entry. */
 export function clearEntries() {
   try {
@@ -87,6 +98,43 @@ function persist(entries) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
   } catch {
     /* storage full or unavailable — fail quietly, the in-memory state still works */
+  }
+}
+
+/** localStorage key for the (optional) exam profile. */
+const EXAM_KEY = 'mindease.exam.v1'
+
+/**
+ * @typedef {Object} ExamProfile
+ * @property {string} name  Exam name, e.g. "NEET".
+ * @property {string} [date] ISO date string (YYYY-MM-DD) of the exam, if known.
+ */
+
+/**
+ * Load the saved exam profile, or null if none. Stored locally like everything else.
+ * @returns {ExamProfile|null}
+ */
+export function loadExam() {
+  try {
+    const raw = localStorage.getItem(EXAM_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed.name === 'string' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Save (or clear, when name is empty) the exam profile.
+ * @param {ExamProfile|null} exam
+ */
+export function saveExam(exam) {
+  try {
+    if (!exam || !exam.name) localStorage.removeItem(EXAM_KEY)
+    else localStorage.setItem(EXAM_KEY, JSON.stringify(exam))
+  } catch {
+    /* ignore */
   }
 }
 

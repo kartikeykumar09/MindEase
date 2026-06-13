@@ -7,19 +7,18 @@
 const PROXY_URL = '/api/gemini'
 
 /**
- * Call Gemini through the local proxy in JSON mode.
- * @param {string} system System prompt.
- * @param {string} user   User content.
- * @param {number} temperature Sampling temperature.
- * @param {number} maxTokens   Cap on generated tokens (Gemini `maxOutputTokens`).
+ * Call Gemini through the local proxy in JSON mode. For security the relay is server-driven: we
+ * send only the `mode` (the server picks the fixed prompt + token budget) and the user text. The
+ * system prompt is never sent from the browser.
+ * @param {{ mode: ('triage'|'analyze'), user: string }} req
  * @returns {Promise<string>} Raw assistant message content.
  * @throws if the proxy/Gemini errors or no key is configured.
  */
-export async function geminiChat(system, user, temperature, maxTokens) {
+export async function geminiChat({ mode, user }) {
   const res = await fetch(PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system, user, temperature, maxTokens }),
+    body: JSON.stringify({ mode, user }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data?.error || `Gemini proxy responded ${res.status}`)

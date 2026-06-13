@@ -1,13 +1,22 @@
+import { useState } from 'react'
 import ReadAloud from './ReadAloud.jsx'
 
 const MOOD_EMOJI = { 1: '😣', 2: '😔', 3: '😐', 4: '🙂', 5: '😄' }
 
 /**
- * A reverse-chronological list of past check-ins, with read-aloud per entry.
- * @param {{ entries: import('../lib/storage.js').Entry[] }} props
+ * A reverse-chronological list of past check-ins, with read-aloud per entry and privacy controls:
+ * delete a single entry, or clear everything (with an inline confirm step).
+ * Presentational — storage side effects live in App via the onDelete / onClearAll callbacks.
+ * @param {{
+ *   entries: import('../lib/storage.js').Entry[],
+ *   onDelete: (id: string) => void,
+ *   onClearAll: () => void,
+ * }} props
  * @returns {JSX.Element}
  */
-export default function HistoryList({ entries }) {
+export default function HistoryList({ entries, onDelete, onClearAll }) {
+  const [confirmingClear, setConfirmingClear] = useState(false)
+
   if (!entries.length) {
     return (
       <section aria-labelledby="hist-title">
@@ -19,7 +28,31 @@ export default function HistoryList({ entries }) {
 
   return (
     <section aria-labelledby="hist-title">
-      <h2 id="hist-title">Your history</h2>
+      <div className="card-head">
+        <h2 id="hist-title">Your history</h2>
+        {confirmingClear ? (
+          <span className="confirm-clear" role="group" aria-label="Confirm clearing all entries">
+            <span className="muted">Delete everything?</span>
+            <button
+              className="btn-danger"
+              onClick={() => {
+                onClearAll()
+                setConfirmingClear(false)
+              }}
+            >
+              Yes, clear all
+            </button>
+            <button className="btn-secondary" onClick={() => setConfirmingClear(false)}>
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button className="btn-secondary" onClick={() => setConfirmingClear(true)}>
+            Clear all
+          </button>
+        )}
+      </div>
+
       <div className="card">
         {entries.map((e) => (
           <article className="entry" key={e.id}>
@@ -32,7 +65,16 @@ export default function HistoryList({ entries }) {
                   {new Date(e.ts).toLocaleString()}
                 </time>
               </span>
-              <ReadAloud text={e.text} />
+              <span className="entry-actions">
+                <ReadAloud text={e.text} />
+                <button
+                  className="btn-secondary"
+                  onClick={() => onDelete(e.id)}
+                  aria-label={`Delete check-in from ${new Date(e.ts).toLocaleString()}`}
+                >
+                  🗑 Delete
+                </button>
+              </span>
             </header>
             <p>{e.text}</p>
             {e.analysis?.triggers?.length > 0 && (

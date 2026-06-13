@@ -1,19 +1,32 @@
 import MoodChart from './MoodChart.jsx'
-import { aggregateTriggers, moodSeries } from '../lib/triggers.js'
+import { aggregateTriggers, moodSeries, patternInsights } from '../lib/triggers.js'
 
 /**
- * Patterns over time: a mood line chart and a ranked list of recurring stress triggers.
+ * Patterns over time: a narrative insight summary, a mood line chart, and a ranked list of
+ * recurring stress triggers. All computed on-device from stored entries — no AI call.
  * @param {{ entries: import('../lib/storage.js').Entry[] }} props
  * @returns {JSX.Element}
  */
 export default function Dashboard({ entries }) {
   const series = moodSeries(entries)
   const triggers = aggregateTriggers(entries)
+  const insights = patternInsights(entries)
   const max = triggers.length ? triggers[0].count : 1
 
   return (
     <section aria-labelledby="dash-title">
       <h2 id="dash-title">Your patterns</h2>
+
+      {insights.length > 0 && (
+        <div className="card insights">
+          <h3>What stands out</h3>
+          <ul className="insight-list">
+            {insights.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="card">
         <h3>Mood over time</h3>

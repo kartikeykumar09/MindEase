@@ -1,27 +1,46 @@
 /**
  * Vercel serverless function for the optional Gemini provider (production deploys).
  *
- * Mirrors the local Vite dev-server proxy in vite.config.js, but runs as a deployed function so
- * the toggle works on Vercel too. The API key is read SERVER-SIDE from the `GEMINI_API_KEY`
- * environment variable (set in the Vercel project settings) — it is never exposed to the browser.
+ * Mirrors the local Vite dev-server proxy in vite.config.js — both delegate to the shared
+ * api/gemini-core.js so the request/response handling and security guards can never drift. The API
+ * key is read SERVER-SIDE from the `GEMINI_API_KEY` environment variable (set in the Vercel project
+ * settings); it is never exposed to the browser.
  *
  *   GET  /api/gemini  -> { configured: boolean, model: string }
- *   POST /api/gemini  -> { content: string }   (body: { system, user, temperature, maxTokens })
+ *   POST /api/gemini  -> { content: string }   (body: { mode: 'triage'|'analyze', user: string })
+ *
+ * The relay is hardened (see api/gemini-core.js): the system prompt + token budget are server-owned,
+ * user text is length-capped, requests must be same-origin, and a per-IP rate limit throttles bursts.
  *
  * @param {import('http').IncomingMessage & {method: string, body?: any}} req
  * @param {import('http').ServerResponse & {status: Function, json: Function}} res
  */
+import {
+  geminiSettings,
+  resolveRequest,
+  callGemini,
+  isSameOrigin,
+  rateLimited,
+  clientIp,
+} from './gemini-core.js'
+
 export default async function handler(req, res) {
-  const KEY = process.env.GEMINI_API_KEY || ''
-  const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+  const { key, model } = geminiSettings()
 
   if (req.method === 'GET') {
-    return res.status(200).json({ configured: Boolean(KEY), model: MODEL })
+    return res.status(200).json({ configured: Boolean(key), model })
   }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
-  if (!KEY) {
+  // Security guards before any work: same-origin only, then a per-IP burst limit.
+  if (!isSameOrigin(req)) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  if (rateLimited(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests — please slow down.' })
+  }
+  if (!key) {
     return res
       .status(400)
       .json({ error: 'GEMINI_API_KEY is not set in the deployment environment' })
@@ -29,32 +48,20 @@ export default async function handler(req, res) {
 
   try {
     const body = await readBody(req)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`
-    const upstream = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: body.system || '' }] },
-        contents: [{ role: 'user', parts: [{ text: body.user || '' }] }],
-        generationConfig: {
-          temperature: typeof body.temperature === 'number' ? body.temperature : 0.4,
-          maxOutputTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
-          responseMimeType: 'application/json',
-          // Disable "thinking" — otherwise reasoning tokens consume the output budget and
-          // truncate the JSON. These are structured classification/extraction tasks.
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-    })
-    if (!upstream.ok) {
-      const detail = await upstream.text()
-      return res.status(502).json({ error: `Gemini responded ${upstream.status}`, detail })
+    const spec = resolveRequest(body)
+    if ('error' in spec) {
+      return res.status(400).json({ error: spec.error })
     }
-    const data = await upstream.json()
-    const content = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') ?? ''
-    return res.status(200).json({ content })
+    const result = await callGemini(spec, { key, model })
+    if (!result.ok) {
+      // Log upstream detail server-side only; return a generic message to the browser.
+      console.error('[gemini] upstream error:', result.error, result.detail)
+      return res.status(result.status).json({ error: result.error })
+    }
+    return res.status(200).json({ content: result.content })
   } catch (err) {
-    return res.status(500).json({ error: String(err?.message || err) })
+    console.error('[gemini] handler error:', err)
+    return res.status(500).json({ error: 'Internal error' })
   }
 }
 

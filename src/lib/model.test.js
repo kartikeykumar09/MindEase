@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { extractJson, parseTriage, parseAnalysis, triage, analyze, PROVIDERS } from './model.js'
+import {
+  extractJson,
+  parseTriage,
+  parseAnalysis,
+  triage,
+  analyze,
+  buildAnalysisUser,
+  MAX_JOURNAL_CHARS,
+  PROVIDERS,
+} from './model.js'
 import { OLLAMA_URL } from './constants.js'
 
 describe('extractJson', () => {
@@ -111,6 +120,37 @@ describe('parseAnalysis', () => {
   })
 })
 
+describe('buildAnalysisUser — personalisation context', () => {
+  it('includes mood + journal with no context block when none is given', () => {
+    const msg = buildAnalysisUser(3, 'so much syllabus left')
+    expect(msg).toContain('Mood (1-5): 3')
+    expect(msg).toContain('so much syllabus left')
+    expect(msg).not.toContain('Context')
+  })
+
+  it('weaves in recurring triggers, mood trend and exam (with days-until)', () => {
+    const msg = buildAnalysisUser(2, 'tired', {
+      recurringTriggers: ['sleep', 'comparison'],
+      moodTrend: 'low and dipping',
+      exam: { name: 'NEET', daysUntil: 12 },
+    })
+    expect(msg).toContain('sleep, comparison')
+    expect(msg).toContain('low and dipping')
+    expect(msg).toContain('NEET (in 12 days)')
+  })
+
+  it('adds the prior reflection on a follow-up turn', () => {
+    const msg = buildAnalysisUser(3, 'more thoughts', { priorReflection: 'You sound stretched.' })
+    expect(msg).toContain('Earlier in this conversation')
+    expect(msg).toContain('You sound stretched.')
+  })
+
+  it('truncates very long journal text', () => {
+    const msg = buildAnalysisUser(3, 'x'.repeat(MAX_JOURNAL_CHARS + 1000))
+    expect(msg).not.toContain('x'.repeat(MAX_JOURNAL_CHARS + 1))
+  })
+})
+
 describe('triage / analyze — provider dispatch', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -141,6 +181,19 @@ describe('triage / analyze — provider dispatch', () => {
       '/api/gemini',
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('Gemini relay receives only { mode, user } — never the system prompt from the client', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: '{"risk":"none","reason":"ok"}' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await triage('just tired', PROVIDERS.GEMINI)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body).toEqual({ mode: 'triage', user: 'just tired' })
+    expect(body.system).toBeUndefined()
   })
 
   it('triage() fails SAFE to elevated when the model returns unparseable content', async () => {

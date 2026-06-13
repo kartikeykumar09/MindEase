@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { loadEntries, saveEntry, updateEntry, clearEntries } from './storage.js'
+import {
+  loadEntries,
+  saveEntry,
+  updateEntry,
+  deleteEntry,
+  clearEntries,
+  loadExam,
+  saveExam,
+} from './storage.js'
 import { STORAGE_KEY } from './constants.js'
 
 /** Minimal in-memory localStorage so the pure storage logic can be tested in a node env. */
@@ -49,6 +57,20 @@ describe('storage', () => {
     expect(updateEntry('does-not-exist', { risk: 'none' })).toBeNull()
   })
 
+  it('deletes a single entry by id and leaves the rest', () => {
+    const a = saveEntry({ mood: 3, text: 'keep' })
+    const b = saveEntry({ mood: 1, text: 'remove' })
+    const remaining = deleteEntry(b.id)
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0].id).toBe(a.id)
+    expect(loadEntries().map((e) => e.text)).toEqual(['keep'])
+  })
+
+  it('deleting a missing id is a no-op', () => {
+    saveEntry({ mood: 3, text: 'a' })
+    expect(deleteEntry('nope')).toHaveLength(1)
+  })
+
   it('clears all entries', () => {
     saveEntry({ mood: 3, text: 'a' })
     clearEntries()
@@ -63,5 +85,17 @@ describe('storage', () => {
   it('ignores a stored value that is not an array', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ foo: 'bar' }))
     expect(loadEntries()).toEqual([])
+  })
+
+  it('saves and loads an exam profile', () => {
+    expect(loadExam()).toBeNull()
+    saveExam({ name: 'NEET', date: '2026-05-03' })
+    expect(loadExam()).toEqual({ name: 'NEET', date: '2026-05-03' })
+  })
+
+  it('clears the exam profile when name is empty', () => {
+    saveExam({ name: 'JEE' })
+    saveExam({ name: '' })
+    expect(loadExam()).toBeNull()
   })
 })

@@ -56,7 +56,7 @@ export default function MoodChart({ series }) {
           />
         )}
         {series.map((p, i) => (
-          <circle key={i} cx={xFor(i)} cy={yFor(p.mood)} r="5" fill="#3a6ea5" />
+          <circle key={p.ts} cx={xFor(i)} cy={yFor(p.mood)} r="5" fill="#3a6ea5" />
         ))}
         {/* first + last date labels */}
         <text x={xFor(0)} y={H - 8} fontSize="12" textAnchor="middle" fill="#45546e">
@@ -79,8 +79,8 @@ export default function MoodChart({ series }) {
             </tr>
           </thead>
           <tbody>
-            {series.map((p, i) => (
-              <tr key={i}>
+            {series.map((p) => (
+              <tr key={p.ts}>
                 <td>{new Date(p.ts).toLocaleString()}</td>
                 <td>{p.mood}</td>
               </tr>

@@ -7,6 +7,7 @@ import CheckIn from './CheckIn.jsx'
 import SafetyCard from './SafetyCard.jsx'
 import SupportCard from './SupportCard.jsx'
 import ProviderToggle from './ProviderToggle.jsx'
+import HistoryList from './HistoryList.jsx'
 import { PROVIDERS } from '../lib/model.js'
 
 afterEach(cleanup)
@@ -67,6 +68,38 @@ describe('SupportCard', () => {
     const { container } = render(<SupportCard analysis={null} onReset={() => {}} />)
     expect(container).toBeEmptyDOMElement()
   })
+
+  it('submits a companion follow-up when onFollowUp is provided', async () => {
+    const onFollowUp = vi.fn()
+    render(<SupportCard analysis={analysis} onFollowUp={onFollowUp} />)
+    await userEvent.type(screen.getByLabelText(/want to say more/i), 'I keep procrastinating')
+    await userEvent.click(screen.getByRole('button', { name: /continue talking/i }))
+    expect(onFollowUp).toHaveBeenCalledWith('I keep procrastinating')
+  })
+
+  it('shows no follow-up form when onFollowUp is absent', () => {
+    render(<SupportCard analysis={analysis} onReset={() => {}} />)
+    expect(screen.queryByLabelText(/want to say more/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('CheckIn — accessibility + exam context', () => {
+  it('explains via aria-describedby why Reflect is disabled', () => {
+    render(<CheckIn onReflect={() => {}} busy={false} />)
+    const reflect = screen.getByRole('button', { name: /^reflect$/i })
+    expect(reflect).toBeDisabled()
+    expect(reflect).toHaveAttribute('aria-describedby', 'reflect-hint')
+    expect(screen.getByText(/pick a mood and write/i)).toBeInTheDocument()
+  })
+
+  it('renders the optional exam fields only when onExamChange is provided', () => {
+    const { rerender } = render(<CheckIn onReflect={() => {}} busy={false} />)
+    expect(screen.queryByLabelText(/^exam$/i)).not.toBeInTheDocument()
+
+    rerender(<CheckIn onReflect={() => {}} busy={false} exam={null} onExamChange={() => {}} />)
+    expect(screen.getByLabelText(/^exam$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^date$/i)).toBeInTheDocument()
+  })
 })
 
 describe('ProviderToggle', () => {
@@ -87,5 +120,48 @@ describe('ProviderToggle', () => {
     expect(gemini).toBeEnabled()
     await userEvent.click(gemini)
     expect(onChange).toHaveBeenCalledWith(PROVIDERS.GEMINI)
+  })
+})
+
+describe('HistoryList — privacy controls', () => {
+  const entries = [
+    { id: 'a', ts: 1700000000000, mood: 3, text: 'felt okay today', analysis: null },
+    { id: 'b', ts: 1700000100000, mood: 1, text: 'rough day', analysis: null },
+  ]
+
+  it('deletes a single entry via its delete button', async () => {
+    const onDelete = vi.fn()
+    render(<HistoryList entries={entries} onDelete={onDelete} onClearAll={() => {}} />)
+    const deletes = screen.getAllByRole('button', { name: /delete check-in/i })
+    expect(deletes).toHaveLength(2)
+    await userEvent.click(deletes[0])
+    expect(onDelete).toHaveBeenCalledWith('a')
+  })
+
+  it('requires confirmation before clearing all entries', async () => {
+    const onClearAll = vi.fn()
+    render(<HistoryList entries={entries} onDelete={() => {}} onClearAll={onClearAll} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /^clear all$/i }))
+    // Not cleared yet — a confirm step appears first.
+    expect(onClearAll).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: /yes, clear all/i }))
+    expect(onClearAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancelling the clear confirmation does nothing', async () => {
+    const onClearAll = vi.fn()
+    render(<HistoryList entries={entries} onDelete={() => {}} onClearAll={onClearAll} />)
+    await userEvent.click(screen.getByRole('button', { name: /^clear all$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(onClearAll).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^clear all$/i })).toBeInTheDocument()
+  })
+
+  it('shows the empty state with no controls when there are no entries', () => {
+    render(<HistoryList entries={[]} onDelete={() => {}} onClearAll={() => {}} />)
+    expect(screen.getByText(/no entries yet/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /clear all/i })).not.toBeInTheDocument()
   })
 })

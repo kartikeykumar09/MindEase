@@ -1,13 +1,21 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import {
+  resolveRequest,
+  callGemini,
+  isSameOrigin,
+  rateLimited,
+  clientIp,
+} from './api/gemini-core.js'
 
 /**
  * Dev-server proxy for the optional Gemini provider.
  *
  * The API key is read here, SERVER-SIDE, from `GEMINI_API_KEY` in `.env`. It is never exposed to
- * the browser bundle (only `VITE_`-prefixed vars are). The client posts {system, user, temperature,
- * maxTokens} to `/api/gemini`; this proxy injects the key, calls Gemini, and returns {content}.
- * A GET to `/api/gemini` reports whether a key is configured, so the UI can enable/disable the toggle.
+ * the browser bundle (only `VITE_`-prefixed vars are). The client posts { mode, user } to
+ * `/api/gemini`; this proxy picks the fixed prompt + budget, injects the key, calls Gemini, and
+ * returns { content }. The request handling + security guards are shared with the production Vercel
+ * function via api/gemini-core.js. A GET reports whether a key is configured (UI toggle state).
  * @param {Record<string, string>} env Loaded environment variables.
  * @returns {import('vite').Plugin}
  */
@@ -19,52 +27,43 @@ function geminiProxy(env) {
     configureServer(server) {
       server.middlewares.use('/api/gemini', async (req, res) => {
         res.setHeader('Content-Type', 'application/json')
+        const send = (status, payload) => {
+          res.statusCode = status
+          res.end(JSON.stringify(payload))
+        }
 
         if (req.method === 'GET') {
-          res.end(JSON.stringify({ configured: Boolean(KEY), model: MODEL }))
-          return
+          return send(200, { configured: Boolean(KEY), model: MODEL })
         }
         if (req.method !== 'POST') {
-          res.statusCode = 405
-          res.end(JSON.stringify({ error: 'Method not allowed' }))
-          return
+          return send(405, { error: 'Method not allowed' })
+        }
+        if (!isSameOrigin(req)) {
+          return send(403, { error: 'Forbidden' })
+        }
+        if (rateLimited(clientIp(req))) {
+          return send(429, { error: 'Too many requests — please slow down.' })
         }
         if (!KEY) {
-          res.statusCode = 400
-          res.end(JSON.stringify({ error: 'GEMINI_API_KEY is not set in .env' }))
-          return
+          return send(400, { error: 'GEMINI_API_KEY is not set in .env' })
         }
 
         try {
           const body = await readJson(req)
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`
-          const upstream = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: body.system || '' }] },
-              contents: [{ role: 'user', parts: [{ text: body.user || '' }] }],
-              generationConfig: {
-                temperature: typeof body.temperature === 'number' ? body.temperature : 0.4,
-                maxOutputTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
-                responseMimeType: 'application/json',
-                // Disable "thinking" so reasoning tokens don't consume the output budget.
-                thinkingConfig: { thinkingBudget: 0 },
-              },
-            }),
-          })
-          if (!upstream.ok) {
-            const detail = await upstream.text()
-            res.statusCode = 502
-            res.end(JSON.stringify({ error: `Gemini responded ${upstream.status}`, detail }))
-            return
+          const spec = resolveRequest(body)
+          if ('error' in spec) {
+            return send(400, { error: spec.error })
           }
-          const data = await upstream.json()
-          const content = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') ?? ''
-          res.end(JSON.stringify({ content }))
+          const result = await callGemini(spec, { key: KEY, model: MODEL })
+          if (!result.ok) {
+            // Log upstream detail server-side only; return a generic message to the browser.
+            console.error('[gemini] upstream error:', result.error, result.detail)
+            return send(result.status, { error: result.error })
+          }
+          return send(200, { content: result.content })
         } catch (err) {
-          res.statusCode = 500
-          res.end(JSON.stringify({ error: String(err?.message || err) }))
+          console.error('[gemini] proxy error:', err)
+          return send(500, { error: 'Internal error' })
         }
       })
     },

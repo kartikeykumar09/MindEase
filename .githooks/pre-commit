@@ -1,0 +1,24 @@
+#!/bin/sh
+# MindEase pre-commit guard — refuses to commit secrets or env files.
+# Activate with:  npm run setup:hooks   (or: git config core.hooksPath .githooks)
+# Bypass a false positive with:  git commit --no-verify
+
+# 1) Never commit a real env file (.env.example is the only allowed one).
+blocked_env=$(git diff --cached --name-only --diff-filter=AM \
+  | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
+if [ -n "$blocked_env" ]; then
+  echo "✋ Refusing to commit env file(s) that may hold secrets:"
+  echo "$blocked_env" | sed 's/^/   /'
+  echo "   They are gitignored for a reason. Use .env locally; commit only .env.example."
+  exit 1
+fi
+
+# 2) Scan staged content for secret-shaped strings (Google API keys / OAuth tokens / a populated key).
+if git diff --cached -U0 \
+  | grep -nE 'AIza[0-9A-Za-z_-]{20,}|AQ\.[A-Za-z0-9_-]{20,}|GEMINI_API_KEY=[^[:space:]]+' >/dev/null; then
+  echo "✋ Possible secret detected in staged changes. Commit aborted."
+  echo "   Move it into .env (gitignored). Override a false positive with: git commit --no-verify"
+  exit 1
+fi
+
+exit 0

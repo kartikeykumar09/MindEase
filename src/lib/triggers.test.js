@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { aggregateTriggers, moodSeries } from './triggers.js'
+import { aggregateTriggers, moodSeries, describeMoodTrend, patternInsights } from './triggers.js'
 
 const entries = [
   { id: '1', ts: 300, mood: 2, analysis: { triggers: ['sleep', 'comparison'] } },
@@ -39,5 +39,43 @@ describe('moodSeries', () => {
   it('filters out invalid moods', () => {
     const bad = [{ ts: 1, mood: 9 }, { ts: 2, mood: 3 }, { ts: 3 }]
     expect(moodSeries(bad)).toEqual([{ ts: 2, mood: 3 }])
+  })
+})
+
+const series = (moods) => moods.map((mood, i) => ({ ts: i + 1, mood }))
+
+describe('describeMoodTrend', () => {
+  it('returns empty when there is not enough data', () => {
+    expect(describeMoodTrend([])).toBe('')
+    expect(describeMoodTrend([{ ts: 1, mood: 3 }])).toBe('')
+  })
+
+  it('labels a recent low / good / mixed level', () => {
+    expect(describeMoodTrend(series([2, 2, 2]))).toBe('low')
+    expect(describeMoodTrend(series([5, 5, 4]))).toBe('good')
+    expect(describeMoodTrend(series([3, 3, 3]))).toBe('mixed')
+  })
+
+  it('detects improvement and dipping versus the prior window', () => {
+    expect(describeMoodTrend(series([1, 1, 1, 4, 4, 4]))).toBe('good and improving')
+    expect(describeMoodTrend(series([5, 5, 5, 2, 2, 2]))).toBe('low and dipping')
+  })
+})
+
+describe('patternInsights', () => {
+  it('returns nothing for no data', () => {
+    expect(patternInsights([])).toEqual([])
+  })
+
+  it('surfaces a recurring theme, a tough weekday, and the recent trend', () => {
+    const day = 86_400_000
+    const e = [
+      { id: 'a', ts: 0, mood: 1, analysis: { triggers: ['sleep'] } },
+      { id: 'b', ts: day * 3, mood: 5, analysis: { triggers: ['sleep'] } },
+    ]
+    const out = patternInsights(e)
+    expect(out.some((s) => /most recurring theme/i.test(s) && /sleep/.test(s))).toBe(true)
+    expect(out.some((s) => /dip on \w+day/i.test(s))).toBe(true)
+    expect(out.some((s) => /lately your mood/i.test(s))).toBe(true)
   })
 })

@@ -5,15 +5,13 @@
 import { MODEL_TAG, OLLAMA_URL } from '../constants.js'
 
 /**
- * Call the local Ollama chat endpoint in JSON mode.
- * @param {string} system System prompt.
- * @param {string} user   User content.
- * @param {number} temperature Sampling temperature.
- * @param {number} maxTokens   Cap on generated tokens (Ollama `num_predict`).
+ * Call the local Ollama chat endpoint in JSON mode. Runs fully on-device (localhost), so the full
+ * system prompt is sent directly — there is no relay to harden.
+ * @param {{ system: string, user: string, temperature: number, maxTokens: number }} req
  * @returns {Promise<string>} Raw assistant message content.
  * @throws if Ollama is unreachable or returns a non-OK status.
  */
-export async function ollamaChat(system, user, temperature, maxTokens) {
+export async function ollamaChat({ system, user, temperature, maxTokens }) {
   const res = await fetch(OLLAMA_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

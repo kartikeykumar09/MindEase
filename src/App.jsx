@@ -6,11 +6,36 @@ import Dashboard from './components/Dashboard.jsx'
 import HistoryList from './components/HistoryList.jsx'
 import Footer from './components/Footer.jsx'
 import ProviderToggle from './components/ProviderToggle.jsx'
-import { loadEntries, saveEntry, updateEntry } from './lib/storage.js'
+import {
+  loadEntries,
+  saveEntry,
+  updateEntry,
+  deleteEntry,
+  clearEntries,
+  loadExam,
+  saveExam,
+} from './lib/storage.js'
 import { triage, analyze, PROVIDERS } from './lib/model.js'
+import { aggregateTriggers, moodSeries, describeMoodTrend } from './lib/triggers.js'
 import { geminiConfigured } from './lib/providers/gemini.js'
 
 const PROVIDER_KEY = 'mindease.provider'
+
+/**
+ * Turn a stored exam profile into the compact shape the support prompt wants, computing days-until
+ * from today. Returns null when no exam name is set.
+ * @param {{name?: string, date?: string}|null} exam
+ * @returns {{name: string, daysUntil: number|null}|null}
+ */
+function examForPrompt(exam) {
+  if (!exam?.name) return null
+  let daysUntil = null
+  if (exam.date) {
+    const ms = new Date(exam.date).getTime() - Date.now()
+    if (!Number.isNaN(ms)) daysUntil = Math.max(0, Math.ceil(ms / 86_400_000))
+  }
+  return { name: exam.name, daysUntil }
+}
 
 /**
  * Root component and flow state machine.
@@ -30,6 +55,8 @@ export default function App() {
     () => localStorage.getItem(PROVIDER_KEY) || PROVIDERS.OLLAMA,
   )
   const [geminiAvailable, setGeminiAvailable] = useState(false)
+  const [exam, setExam] = useState(() => loadExam())
+  const [lastMood, setLastMood] = useState(0)
   const resultRef = useRef(null)
 
   // Keep the document title calm and static.
@@ -60,7 +87,33 @@ export default function App() {
   }
 
   /**
-   * Save the entry, run safety triage FIRST, then (only if safe) generate support.
+   * Build the personalisation context for the support prompt from the student's history: their
+   * most-frequent past triggers, recent mood trend, the exam they're preparing for, and — on a
+   * follow-up turn — the previous reflection. Computed from already-stored data (no extra AI call).
+   * @param {string} [priorReflection]
+   * @returns {import('./lib/model.js').SupportContext}
+   */
+  function buildContext(priorReflection) {
+    const ctx = {
+      recurringTriggers: aggregateTriggers(entries)
+        .slice(0, 3)
+        .map((t) => t.tag),
+      moodTrend: describeMoodTrend(moodSeries(entries)),
+      exam: examForPrompt(exam),
+    }
+    if (priorReflection) ctx.priorReflection = priorReflection
+    return ctx
+  }
+
+  /** Friendly, recoverable message when the model can't be reached. The entry is still saved. */
+  function modelUnreachableMessage() {
+    return provider === PROVIDERS.GEMINI
+      ? "Couldn't reach Gemini just now. Check your connection and try again — your entry was saved."
+      : "Couldn't reach the local model. Make sure Ollama is running (ollama serve) and try again. Your entry was saved."
+  }
+
+  /**
+   * Save the entry, run safety triage FIRST, then (only if safe) generate personalised support.
    * @param {number} mood
    * @param {string} text
    */
@@ -68,7 +121,9 @@ export default function App() {
     setBusy(true)
     setError('')
     setResult(null)
+    const context = buildContext() // from history BEFORE this entry is added
     const saved = saveEntry({ mood, text })
+    setLastMood(mood)
 
     try {
       // PASS 1 — safety triage. Always first.
@@ -82,7 +137,7 @@ export default function App() {
       }
 
       // PASS 2 — support, only when risk is "none".
-      const analysis = await analyze(mood, text, provider)
+      const analysis = await analyze(mood, text, provider, context)
       updateEntry(saved.id, { risk: 'none', analysis })
       setEntries(loadEntries())
       if (!analysis) {
@@ -91,15 +146,41 @@ export default function App() {
         setError("Couldn't read the response just now. Please tap Reflect to try again.")
         return
       }
-      setResult({ kind: 'support', analysis })
-    } catch (err) {
+      setResult({ kind: 'support', thread: [analysis] })
+    } catch {
       // Model unreachable or errored. The entry is still saved.
-      setError(
-        provider === PROVIDERS.GEMINI
-          ? `Couldn't reach Gemini. Check your GEMINI_API_KEY and network. Your entry was saved. (${err?.message || 'error'})`
-          : "Couldn't reach the local model. Make sure Ollama is running (ollama serve) and try again. Your entry was saved.",
-      )
+      setError(modelUnreachableMessage())
       setEntries(loadEntries())
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
+   * Companion follow-up turn. Runs safety triage FIRST (same gate as a check-in), then continues
+   * the conversation with the prior reflection as context. Follow-ups are ephemeral — they refine
+   * the same check-in rather than creating new mood entries.
+   * @param {string} text
+   */
+  async function handleFollowUp(text) {
+    setBusy(true)
+    setError('')
+    try {
+      // Safety still comes first, even mid-conversation.
+      const { risk } = await triage(text, provider)
+      if (risk === 'crisis' || risk === 'elevated') {
+        setResult({ kind: 'safety' })
+        return
+      }
+      const prior = result?.thread?.[result.thread.length - 1]?.reflection
+      const analysis = await analyze(lastMood || 3, text, provider, buildContext(prior))
+      if (!analysis) {
+        setError("Couldn't read the response just now. Please try again.")
+        return
+      }
+      setResult((r) => ({ kind: 'support', thread: [...(r?.thread || []), analysis] }))
+    } catch {
+      setError(modelUnreachableMessage())
     } finally {
       setBusy(false)
     }
@@ -109,6 +190,27 @@ export default function App() {
   function reset() {
     setResult(null)
     setError('')
+  }
+
+  /** Persist the optional exam profile (used to ground support in the student's exam + timeline). */
+  function handleExamChange(next) {
+    setExam(next)
+    saveExam(next)
+  }
+
+  /**
+   * Privacy control — permanently remove a single stored entry.
+   * @param {string} id
+   */
+  function handleDelete(id) {
+    deleteEntry(id)
+    setEntries(loadEntries())
+  }
+
+  /** Privacy control — wipe every stored entry from this browser. */
+  function handleClearAll() {
+    clearEntries()
+    setEntries(loadEntries())
   }
 
   return (
@@ -156,7 +258,14 @@ export default function App() {
       <main id="main" tabIndex={-1}>
         {tab === 'checkin' && (
           <>
-            {!result && <CheckIn onReflect={handleReflect} busy={busy} />}
+            {!result && (
+              <CheckIn
+                onReflect={handleReflect}
+                busy={busy}
+                exam={exam}
+                onExamChange={handleExamChange}
+              />
+            )}
 
             {/* The async outcome lands here; aria-live announces it and we focus it on appear. */}
             <div ref={resultRef} tabIndex={-1} aria-live="polite" className="result-region">
@@ -166,14 +275,28 @@ export default function App() {
                 </p>
               )}
               {result?.kind === 'safety' && <SafetyCard onReset={reset} />}
-              {result?.kind === 'support' && (
-                <SupportCard analysis={result.analysis} onReset={reset} />
-              )}
+              {result?.kind === 'support' &&
+                result.thread.map((analysis, i) => {
+                  const isLast = i === result.thread.length - 1
+                  return (
+                    <SupportCard
+                      key={i}
+                      analysis={analysis}
+                      titleId={`support-title-${i}`}
+                      heading={i === 0 ? 'A moment of reflection' : 'A follow-up thought'}
+                      onFollowUp={isLast ? handleFollowUp : undefined}
+                      onReset={isLast ? reset : undefined}
+                      busy={busy}
+                    />
+                  )
+                })}
             </div>
           </>
         )}
 
-        {tab === 'history' && <HistoryList entries={entries} />}
+        {tab === 'history' && (
+          <HistoryList entries={entries} onDelete={handleDelete} onClearAll={handleClearAll} />
+        )}
         {tab === 'dashboard' && <Dashboard entries={entries} />}
       </main>
 

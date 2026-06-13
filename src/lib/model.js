@@ -118,23 +118,74 @@ function clean(v) {
   return s
 }
 
-/** Supported provider ids. */
+/**
+ * Supported provider ids.
+ * @type {{ OLLAMA: 'ollama', GEMINI: 'gemini' }}
+ */
 export const PROVIDERS = { OLLAMA: 'ollama', GEMINI: 'gemini' }
+
+/** Max characters of journal text sent to the model — keeps small models fast + cloud cost bounded. */
+export const MAX_JOURNAL_CHARS = 2000
 
 /**
  * Dispatch a chat call to the chosen provider with JSON-mode formatting.
+ *
+ * For on-device Ollama we send the full system prompt directly. For the cloud Gemini relay we send
+ * only the `mode`; the server owns the prompt + token budget (see api/gemini-core.js), so a public
+ * deploy can't be driven with arbitrary prompts.
  * @param {('ollama'|'gemini')} provider
- * @param {string} system  System prompt.
- * @param {string} user    User content.
- * @param {number} temperature  Sampling temperature. Triage uses 0 for consistency.
- * @param {number} maxTokens    Cap on generated tokens — keeps each call short so a small local
- *   model can't run away and stall a low-powered machine.
+ * @param {{ mode: ('triage'|'analyze'), system: string, user: string, temperature: number, maxTokens: number }} spec
  * @returns {Promise<string>} The raw assistant message content.
  * @throws if the model is unreachable or returns a non-OK status.
  */
-function chat(provider, system, user, temperature, maxTokens) {
-  const fn = provider === PROVIDERS.GEMINI ? geminiChat : ollamaChat
-  return fn(system, user, temperature, maxTokens)
+function chat(provider, { mode, system, user, temperature, maxTokens }) {
+  return provider === PROVIDERS.GEMINI
+    ? geminiChat({ mode, user })
+    : ollamaChat({ system, user, temperature, maxTokens })
+}
+
+/**
+ * @typedef {Object} SupportContext
+ * @property {string[]} [recurringTriggers]  The student's most-frequent past triggers.
+ * @property {string} [moodTrend]            A short natural-language mood-trend note.
+ * @property {{name?: string, daysUntil?: number|null}} [exam]  Exam the student is preparing for.
+ * @property {string} [priorReflection]      The previous reflection, when this is a follow-up turn.
+ */
+
+/**
+ * Compose the analysis user message: the current mood + journal text, plus a compact, optional
+ * "context" block so support can adapt to the student's history (recurring triggers, mood trend,
+ * exam, and any earlier reflection in this conversation). Kept short to stay fast on small models.
+ * @param {number} mood
+ * @param {string} text
+ * @param {SupportContext} [context={}]
+ * @returns {string}
+ */
+export function buildAnalysisUser(mood, text, context = {}) {
+  const journal = String(text || '').slice(0, MAX_JOURNAL_CHARS)
+  let msg = `Mood (1-5): ${mood}\n\nJournal entry:\n${journal}`
+
+  const notes = []
+  if (Array.isArray(context.recurringTriggers) && context.recurringTriggers.length) {
+    notes.push(
+      `Recurring themes this student has mentioned before: ${context.recurringTriggers.join(', ')}.`,
+    )
+  }
+  if (context.moodTrend) notes.push(`Recent mood trend: ${context.moodTrend}.`)
+  if (context.exam?.name) {
+    const when =
+      typeof context.exam.daysUntil === 'number' && context.exam.daysUntil >= 0
+        ? ` (in ${context.exam.daysUntil} day${context.exam.daysUntil === 1 ? '' : 's'})`
+        : ''
+    notes.push(`Preparing for: ${context.exam.name}${when}.`)
+  }
+  if (context.priorReflection) {
+    notes.push(`Earlier in this conversation you reflected: "${context.priorReflection}"`)
+  }
+  if (notes.length) {
+    msg += `\n\nContext (use gently to personalise — do not force-fit, never quote it back verbatim):\n- ${notes.join('\n- ')}`
+  }
+  return msg
 }
 
 /**
@@ -146,25 +197,32 @@ function chat(provider, system, user, temperature, maxTokens) {
 export async function triage(text, provider = PROVIDERS.OLLAMA) {
   // temperature 0 — safety classification should be as consistent as possible.
   // 80 tokens is plenty for {risk, reason} and keeps this fast on small machines.
-  const raw = await chat(provider, TRIAGE_SYSTEM_PROMPT, text, 0, 80)
+  const raw = await chat(provider, {
+    mode: 'triage',
+    system: TRIAGE_SYSTEM_PROMPT,
+    user: String(text || '').slice(0, MAX_JOURNAL_CHARS),
+    temperature: 0,
+    maxTokens: 80,
+  })
   return parseTriage(raw)
 }
 
 /**
- * PASS 2 — generate warm support. Only call when triage risk is "none".
+ * PASS 2 — generate warm, personalised support. Only call when triage risk is "none".
  * @param {number} mood Mood rating 1-5.
  * @param {string} text Journal entry.
  * @param {('ollama'|'gemini')} [provider='ollama']
+ * @param {SupportContext} [context={}] Optional personalisation context.
  * @returns {Promise<ReturnType<typeof parseAnalysis>>}
  */
-export async function analyze(mood, text, provider = PROVIDERS.OLLAMA) {
+export async function analyze(mood, text, provider = PROVIDERS.OLLAMA, context = {}) {
   // 512 tokens fits a full reflection + coping without truncating the closing JSON brace.
-  const raw = await chat(
-    provider,
-    ANALYSIS_SYSTEM_PROMPT,
-    `Mood (1-5): ${mood}\n\nJournal entry:\n${text}`,
-    0.4,
-    512,
-  )
+  const raw = await chat(provider, {
+    mode: 'analyze',
+    system: ANALYSIS_SYSTEM_PROMPT,
+    user: buildAnalysisUser(mood, text, context),
+    temperature: 0.4,
+    maxTokens: 512,
+  })
   return parseAnalysis(raw)
 }

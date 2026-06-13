@@ -8,7 +8,8 @@
  * defaulting to `gemma3:1b` — small and light enough to run smoothly on modest machines.
  * To use a different local model, set `VITE_MODEL_TAG` in `.env` and restart the dev server.
  */
-export const MODEL_TAG = import.meta.env?.VITE_MODEL_TAG || 'gemma3:1b'
+const META = /** @type {{ env?: Record<string, string|undefined> }} */ (import.meta)
+export const MODEL_TAG = META.env?.VITE_MODEL_TAG || 'gemma3:1b'
 
 /** Local Ollama chat endpoint. Must stay localhost — data never leaves the device. */
 export const OLLAMA_URL = 'http://localhost:11434/api/chat'
