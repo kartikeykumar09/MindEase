@@ -33,14 +33,27 @@ export default function MoodChart({ series }) {
         {/* gridlines for moods 1-5 */}
         {[1, 2, 3, 4, 5].map((m) => (
           <g key={m}>
-            <line x1={PAD} y1={yFor(m)} x2={W - PAD} y2={yFor(m)} stroke="#e3edf7" strokeWidth="1" />
+            <line
+              x1={PAD}
+              y1={yFor(m)}
+              x2={W - PAD}
+              y2={yFor(m)}
+              stroke="#e3edf7"
+              strokeWidth="1"
+            />
             <text x={PAD - 8} y={yFor(m) + 4} fontSize="12" textAnchor="end" fill="#45546e">
               {m}
             </text>
           </g>
         ))}
         {n > 1 && (
-          <polyline fill="none" stroke="#3a6ea5" strokeWidth="3" points={points} strokeLinejoin="round" />
+          <polyline
+            fill="none"
+            stroke="#3a6ea5"
+            strokeWidth="3"
+            points={points}
+            strokeLinejoin="round"
+          />
         )}
         {series.map((p, i) => (
           <circle key={i} cx={xFor(i)} cy={yFor(p.mood)} r="5" fill="#3a6ea5" />

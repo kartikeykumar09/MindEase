@@ -48,7 +48,7 @@ export default function CheckIn({ onReflect, busy }) {
         </div>
       </fieldset>
 
-      <label htmlFor="journal">What's on your mind?</label>
+      <label htmlFor="journal">What&apos;s on your mind?</label>
       <p className="muted" id="journal-hint">
         Write freely — this stays only in your browser.
       </p>

@@ -9,7 +9,7 @@ import { TELE_MANAS } from '../lib/constants.js'
 export default function SafetyCard({ onReset }) {
   return (
     <section className="card safety" role="alert" aria-labelledby="safety-title">
-      <h2 id="safety-title">You don't have to carry this alone</h2>
+      <h2 id="safety-title">You don&apos;t have to carry this alone</h2>
       <p>
         It sounds like things feel really heavy right now. You matter, and talking to someone can
         help more than anything an app can offer. Please reach out — right now if you can.

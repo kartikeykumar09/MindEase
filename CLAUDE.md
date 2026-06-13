@@ -6,7 +6,7 @@ high-stakes exams. Keep the codebase consistent with the rules below.
 ## Product rules (non-negotiable)
 
 1. **Privacy is on-device.** Journal entries live ONLY in `localStorage`. No backend, no accounts,
-   no cloud DB, no analytics, no third-party calls. AI runs on a *local* Ollama instance
+   no cloud DB, no analytics, no third-party calls. AI runs on a _local_ Ollama instance
    (`http://localhost:11434/api/chat`). Data never leaves the machine. State this in UI + README.
 2. **Safety triage runs FIRST.** Every entry is classified for crisis risk before any support is
    generated. If risk is `elevated` or `crisis`, show ONLY the SafetyCard (helpline + trusted-person

@@ -36,15 +36,14 @@ export default function App() {
     document.title = 'MindEase — your private calm space'
   }, [])
 
-  // Find out whether the optional Gemini provider is configured (key set server-side).
+  // Find out whether the optional Gemini provider is configured (key set server-side). If it
+  // isn't, fall back to the on-device provider in case Gemini was previously selected.
   useEffect(() => {
-    geminiConfigured().then(setGeminiAvailable)
+    geminiConfigured().then((ok) => {
+      setGeminiAvailable(ok)
+      if (!ok) setProvider((p) => (p === PROVIDERS.GEMINI ? PROVIDERS.OLLAMA : p))
+    })
   }, [])
-
-  // If Gemini was previously selected but is no longer available, fall back to on-device.
-  useEffect(() => {
-    if (provider === PROVIDERS.GEMINI && !geminiAvailable) setProvider(PROVIDERS.OLLAMA)
-  }, [provider, geminiAvailable])
 
   /** Persist + apply a provider choice. */
   function changeProvider(p) {
@@ -79,6 +78,12 @@ export default function App() {
       const analysis = await analyze(mood, text, provider)
       updateEntry(saved.id, { risk: 'none', analysis })
       setEntries(loadEntries())
+      if (!analysis) {
+        // The model returned something we couldn't parse into support. Don't show a blank
+        // card — surface a gentle, recoverable message instead.
+        setError("Couldn't read the response just now. Please tap Reflect to try again.")
+        return
+      }
       setResult({ kind: 'support', analysis })
     } catch (err) {
       // Model unreachable or errored. The entry is still saved.
@@ -118,7 +123,11 @@ export default function App() {
         </button>
       </nav>
 
-      <ProviderToggle provider={provider} onChange={changeProvider} geminiAvailable={geminiAvailable} />
+      <ProviderToggle
+        provider={provider}
+        onChange={changeProvider}
+        geminiAvailable={geminiAvailable}
+      />
 
       {provider === PROVIDERS.OLLAMA ? (
         <p className="privacy-note on-device" role="note">
@@ -141,7 +150,9 @@ export default function App() {
               </p>
             )}
             {result?.kind === 'safety' && <SafetyCard onReset={reset} />}
-            {result?.kind === 'support' && <SupportCard analysis={result.analysis} onReset={reset} />}
+            {result?.kind === 'support' && (
+              <SupportCard analysis={result.analysis} onReset={reset} />
+            )}
           </>
         )}
 

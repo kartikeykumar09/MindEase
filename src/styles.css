@@ -29,7 +29,12 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   line-height: 1.6;
 }
 
@@ -70,7 +75,7 @@ body {
   color: var(--ink);
   cursor: pointer;
 }
-.tabs button[aria-current="true"] {
+.tabs button[aria-current='true'] {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
@@ -103,7 +108,7 @@ body {
   color: var(--ink);
   cursor: pointer;
 }
-.segmented button[aria-pressed="true"] {
+.segmented button[aria-pressed='true'] {
   background: var(--accent);
   color: var(--accent-ink);
 }
@@ -154,7 +159,7 @@ body {
   background: var(--bg);
   cursor: pointer;
 }
-.mood-row button[aria-pressed="true"] {
+.mood-row button[aria-pressed='true'] {
   border-color: var(--accent);
   background: var(--calm);
   outline: 3px solid var(--accent);

@@ -159,6 +159,12 @@ export async function triage(text, provider = PROVIDERS.OLLAMA) {
  */
 export async function analyze(mood, text, provider = PROVIDERS.OLLAMA) {
   // 512 tokens fits a full reflection + coping without truncating the closing JSON brace.
-  const raw = await chat(provider, ANALYSIS_SYSTEM_PROMPT, `Mood (1-5): ${mood}\n\nJournal entry:\n${text}`, 0.4, 512)
+  const raw = await chat(
+    provider,
+    ANALYSIS_SYSTEM_PROMPT,
+    `Mood (1-5): ${mood}\n\nJournal entry:\n${text}`,
+    0.4,
+    512,
+  )
   return parseAnalysis(raw)
 }

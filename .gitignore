@@ -9,3 +9,6 @@ dist-ssr
 *.log
 .vite
 coverage
+
+# Local hackathon reference (not part of the product)
+mental-wellness-tracker-build-kit-claude-code.md

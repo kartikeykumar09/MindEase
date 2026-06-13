@@ -21,7 +21,14 @@ export default function SupportCard({ analysis, onReset }) {
 
   return (
     <section className="card" aria-labelledby="support-title">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '1rem',
+        }}
+      >
         <h2 id="support-title" style={{ margin: 0 }}>
           A moment of reflection
         </h2>

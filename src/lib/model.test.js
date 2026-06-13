@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { extractJson, parseTriage, parseAnalysis } from './model.js'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { extractJson, parseTriage, parseAnalysis, triage, analyze, PROVIDERS } from './model.js'
+import { OLLAMA_URL } from './constants.js'
 
 describe('extractJson', () => {
   it('parses clean JSON', () => {
@@ -107,5 +108,73 @@ describe('parseAnalysis', () => {
 
   it('returns null when nothing parseable', () => {
     expect(parseAnalysis('garbage')).toBeNull()
+  })
+})
+
+describe('triage / analyze — provider dispatch', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('triage() calls the local Ollama endpoint and parses its content', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ message: { content: '{"risk":"none","reason":"exam worry"}' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const out = await triage('just tired', PROVIDERS.OLLAMA)
+    expect(out).toEqual({ risk: 'none', reason: 'exam worry' })
+    expect(fetchMock).toHaveBeenCalledWith(OLLAMA_URL, expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('triage() routes to the Gemini proxy when provider is gemini', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: '{"risk":"crisis","reason":"self-harm"}' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const out = await triage('hopeless', PROVIDERS.GEMINI)
+    expect(out.risk).toBe('crisis')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/gemini',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('triage() fails SAFE to elevated when the model returns unparseable content', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ message: { content: 'I cannot help' } }),
+      }),
+    )
+    const out = await triage('anything', PROVIDERS.OLLAMA)
+    expect(out.risk).toBe('elevated') // never silently "none"
+  })
+
+  it('triage() propagates a transport error (App then shows an error, never support)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
+    await expect(triage('anything', PROVIDERS.OLLAMA)).rejects.toThrow()
+  })
+
+  it('analyze() parses a well-formed support response', async () => {
+    const payload = JSON.stringify({
+      reflection: 'You sound stretched.',
+      triggers: ['sleep'],
+      coping: [{ title: 'Breathe', how: 'Slow breaths.' }],
+      encouragement: 'You can do this.',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ message: { content: payload } }) }),
+    )
+    const out = await analyze(2, 'so much to do', PROVIDERS.OLLAMA)
+    expect(out.reflection).toBe('You sound stretched.')
+    expect(out.coping).toHaveLength(1)
   })
 })

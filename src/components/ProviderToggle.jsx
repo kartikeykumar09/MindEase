@@ -21,7 +21,9 @@ export default function ProviderToggle({ provider, onChange, geminiAvailable }) 
           aria-pressed={provider === PROVIDERS.GEMINI}
           onClick={() => onChange(PROVIDERS.GEMINI)}
           disabled={!geminiAvailable}
-          title={geminiAvailable ? 'Uses Google Gemini (cloud)' : 'Set GEMINI_API_KEY in .env to enable'}
+          title={
+            geminiAvailable ? 'Uses Google Gemini (cloud)' : 'Set GEMINI_API_KEY in .env to enable'
+          }
         >
           ☁️ Gemini · cloud
         </button>

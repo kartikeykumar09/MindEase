@@ -43,8 +43,8 @@ Footer (always visible) → disclaimer + helpline
 ## Safety model
 
 1. Triage always first. 2. Crisis/elevated → SafetyCard only, no advice. 3. Helpline hardcoded,
-never model-generated. 4. Parse/validation failure on triage → treat as `elevated`. 5. No
-diagnoses or medical claims; coping is curated evidence-based options.
+   never model-generated. 4. Parse/validation failure on triage → treat as `elevated`. 5. No
+   diagnoses or medical claims; coping is curated evidence-based options.
 
 ## Data shapes
 

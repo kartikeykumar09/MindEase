@@ -23,16 +23,20 @@ export default function Dashboard({ entries }) {
       <div className="card">
         <h3>Recurring triggers</h3>
         {triggers.length === 0 ? (
-          <p className="muted">No triggers detected yet. They'll appear as you reflect on more entries.</p>
+          <p className="muted">
+            No triggers detected yet. They&apos;ll appear as you reflect on more entries.
+          </p>
         ) : (
           <ul className="stat-list" aria-label="Recurring triggers by frequency">
             {triggers.map(({ tag, count }) => (
               <li key={tag}>
                 <span style={{ minWidth: '8rem' }}>{tag}</span>
-                <span className="bar" style={{ width: `${(count / max) * 60}%` }} aria-hidden="true" />
-                <span className="muted">
-                  {count}×
-                </span>
+                <span
+                  className="bar"
+                  style={{ width: `${(count / max) * 60}%` }}
+                  aria-hidden="true"
+                />
+                <span className="muted">{count}×</span>
               </li>
             ))}
           </ul>

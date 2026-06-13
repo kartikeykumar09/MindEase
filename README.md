@@ -12,14 +12,14 @@ Everything runs **on your device**. Your journal never leaves your browser.
 ## Why it's different
 
 Standard mood trackers ask "rate your day 1–5" and miss the real signal. The signal lives in what
-you *write* — but students won't pour their fears into something that ships their mental health to a
+you _write_ — but students won't pour their fears into something that ships their mental health to a
 server. MindEase keeps it private by design, and draws a hard line around crisis: it doesn't play
 therapist, it routes you to help.
 
 ## Features
 
 - **Check-in** — a 1–5 mood selector + free-text journal, saved instantly to your browser.
-- **Safety first** — every entry is screened for crisis risk *before* anything else.
+- **Safety first** — every entry is screened for crisis risk _before_ anything else.
 - **Empathetic reflection** — a warm, non-judgmental reflection of what you're feeling.
 - **Hidden triggers** — detected stressors (sleep, comparison, time pressure, self-doubt…) tagged per entry.
 - **Curated coping** — 1–2 safe, evidence-based techniques (breathing, grounding, breaks, sleep, etc.).
@@ -45,7 +45,7 @@ comparison and only if you opt in:
   `AIza`), and set `GEMINI_API_KEY` in your local `.env` (gitignored — never committed).
 - The key is read **server-side** by a small Vite dev-server proxy (`/api/gemini`); it is never
   bundled into the browser code.
-- ⚠️ **Choosing Gemini sends your journal text to Google's servers** — this is *not* on-device. The
+- ⚠️ **Choosing Gemini sends your journal text to Google's servers** — this is _not_ on-device. The
   UI shows a clear banner whenever the cloud engine is active. Switch back to **Local · private** to
   stay fully on-device.
 
@@ -53,12 +53,12 @@ comparison and only if you opt in:
 
 MindEase is a **companion for everyday stress — not a therapist or a crisis service.**
 
-1. **Triage runs first.** Every entry is classified for crisis risk *before* any support is generated.
+1. **Triage runs first.** Every entry is classified for crisis risk _before_ any support is generated.
 2. **If risk is elevated or crisis**, MindEase shows **only** a calm support card with the helpline and
    a nudge to reach a trusted person — it generates **no coping "advice"** in that path.
 3. **The helpline is hardcoded** and never produced by the model:
    **Tele-MANAS — 14416** (also 1-800-891-4416), free & 24/7, Government of India.
-4. **Fail safe.** If a safety check can't be parsed, MindEase treats the risk as *elevated*, never *none*.
+4. **Fail safe.** If a safety check can't be parsed, MindEase treats the risk as _elevated_, never _none_.
 5. **No diagnoses, no medical claims.** Coping content is general, curated, and evidence-based.
 
 > If you or someone you know is in distress, call **Tele-MANAS 14416** — free, 24/7.
@@ -98,11 +98,11 @@ CheckIn (mood + journal) ──save──▶ localStorage
 Dashboard ◀── localStorage ──▶ HistoryList
 ```
 
-| Path | Purpose |
-|------|---------|
+| Path              | Purpose                                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
 | `src/components/` | UI: `CheckIn`, `SafetyCard`, `SupportCard`, `Dashboard`, `MoodChart`, `HistoryList`, `Footer`, `ReadAloud` |
-| `src/lib/` | Logic: `constants.js`, `prompts.js`, `storage.js`, `model.js`, `triggers.js` |
-| `src/App.jsx` | Flow state machine |
+| `src/lib/`        | Logic: `constants.js`, `prompts.js`, `storage.js`, `model.js`, `triggers.js`                               |
+| `src/App.jsx`     | Flow state machine                                                                                         |
 
 ## Accessibility
 
@@ -115,9 +115,31 @@ SVG chart with a screen-reader data table, and respect for `prefers-reduced-moti
 npm test
 ```
 
-Unit tests (vitest) cover the safety-critical pure logic: model JSON extraction (clean / prose-wrapped
-/ garbled), the **fail-safe** triage behavior (unparseable → *elevated*), and trigger aggregation.
+37 unit tests (vitest) cover the safety-critical pure logic and the provider layer:
+
+- **Model parsing** — JSON extraction (clean / prose-wrapped / fenced / garbled), the **fail-safe**
+  triage behavior (unparseable → _elevated_, never _none_), and analysis normalisation (bracket
+  stripping, capping triggers/coping, dropping malformed items).
+- **Provider dispatch** — `triage`/`analyze` route to the right backend (mocked `fetch`) and a
+  transport error propagates rather than silently producing support.
+- **Storage** — save / load / update / clear, newest-first ordering, and graceful recovery from
+  corrupt `localStorage`.
+- **Safety constants** — the Tele-MANAS helpline is hardcoded and the model URL stays on `localhost`.
+
+## Development & quality
+
+```bash
+npm run dev          # start the dev server
+npm test             # run unit tests
+npm run lint         # ESLint (flat config: react + hooks)
+npm run format       # Prettier (format)
+npm run format:check # Prettier (verify)
+npm run build        # production build
+```
+
+The codebase is JSDoc-documented throughout, ESLint-clean, and Prettier-formatted. Runtime
+dependencies are kept to just React; the mood chart is hand-rolled SVG (no chart library).
 
 ## License
 
-MIT — see below. Built for the PromptWars hackathon.
+MIT — see [LICENSE](LICENSE). Built for the PromptWars hackathon.
