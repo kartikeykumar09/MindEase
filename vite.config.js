@@ -13,7 +13,7 @@ import react from '@vitejs/plugin-react'
  */
 function geminiProxy(env) {
   const KEY = env.GEMINI_API_KEY || ''
-  const MODEL = env.GEMINI_MODEL || 'gemini-2.0-flash'
+  const MODEL = env.GEMINI_MODEL || 'gemini-2.5-flash'
   return {
     name: 'mindease-gemini-proxy',
     configureServer(server) {
@@ -48,6 +48,8 @@ function geminiProxy(env) {
                 temperature: typeof body.temperature === 'number' ? body.temperature : 0.4,
                 maxOutputTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
                 responseMimeType: 'application/json',
+                // Disable "thinking" so reasoning tokens don't consume the output budget.
+                thinkingConfig: { thinkingBudget: 0 },
               },
             }),
           })

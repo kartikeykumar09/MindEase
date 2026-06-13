@@ -13,7 +13,7 @@
  */
 export default async function handler(req, res) {
   const KEY = process.env.GEMINI_API_KEY || ''
-  const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+  const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
   if (req.method === 'GET') {
     return res.status(200).json({ configured: Boolean(KEY), model: MODEL })
@@ -38,6 +38,9 @@ export default async function handler(req, res) {
           temperature: typeof body.temperature === 'number' ? body.temperature : 0.4,
           maxOutputTokens: typeof body.maxTokens === 'number' ? body.maxTokens : 512,
           responseMimeType: 'application/json',
+          // Disable "thinking" — otherwise reasoning tokens consume the output budget and
+          // truncate the JSON. These are structured classification/extraction tasks.
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     })
