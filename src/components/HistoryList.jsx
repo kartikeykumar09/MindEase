@@ -23,16 +23,9 @@ export default function HistoryList({ entries }) {
       <div className="card">
         {entries.map((e) => (
           <article className="entry" key={e.id}>
-            <header
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '1rem',
-              }}
-            >
+            <header className="card-head">
               <span>
-                <span aria-hidden="true" style={{ fontSize: '1.3rem' }}>
+                <span className="mood-emoji" aria-hidden="true">
                   {MOOD_EMOJI[e.mood] || ''}
                 </span>{' '}
                 <time dateTime={new Date(e.ts).toISOString()}>

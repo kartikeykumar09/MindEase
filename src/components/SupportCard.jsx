@@ -1,10 +1,14 @@
 import ReadAloud from './ReadAloud.jsx'
 
 /**
+ * @typedef {import('../lib/storage.js').Analysis} Analysis
+ */
+
+/**
  * Shown when triage risk is "none". Displays the empathetic reflection, detected trigger tags,
  * 1-2 coping techniques, and one encouragement line.
- * @param {{ analysis: import('../lib/model.js').parseAnalysis extends (...args: any) => infer R ? R : any, onReset: () => void }} props
- * @returns {JSX.Element}
+ * @param {{ analysis: Analysis|null, onReset: () => void }} props
+ * @returns {JSX.Element|null}
  */
 export default function SupportCard({ analysis, onReset }) {
   if (!analysis) return null
@@ -21,17 +25,8 @@ export default function SupportCard({ analysis, onReset }) {
 
   return (
     <section className="card" aria-labelledby="support-title">
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '1rem',
-        }}
-      >
-        <h2 id="support-title" style={{ margin: 0 }}>
-          A moment of reflection
-        </h2>
+      <div className="card-head">
+        <h2 id="support-title">A moment of reflection</h2>
         <ReadAloud text={spoken} />
       </div>
 
@@ -61,7 +56,7 @@ export default function SupportCard({ analysis, onReset }) {
         </>
       )}
 
-      {encouragement && <p style={{ fontStyle: 'italic' }}>{encouragement}</p>}
+      {encouragement && <p className="encouragement">{encouragement}</p>}
 
       <button className="btn-secondary" onClick={onReset}>
         New check-in

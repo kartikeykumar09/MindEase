@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CheckIn from './components/CheckIn.jsx'
 import SafetyCard from './components/SafetyCard.jsx'
 import SupportCard from './components/SupportCard.jsx'
@@ -30,11 +30,18 @@ export default function App() {
     () => localStorage.getItem(PROVIDER_KEY) || PROVIDERS.OLLAMA,
   )
   const [geminiAvailable, setGeminiAvailable] = useState(false)
+  const resultRef = useRef(null)
 
   // Keep the document title calm and static.
   useEffect(() => {
     document.title = 'MindEase — your private calm space'
   }, [])
+
+  // Move keyboard/screen-reader focus to the result (or error) when it appears, so the
+  // outcome of a check-in is announced and reachable without hunting for it.
+  useEffect(() => {
+    if ((result || error) && resultRef.current) resultRef.current.focus()
+  }, [result, error])
 
   // Find out whether the optional Gemini provider is configured (key set server-side). If it
   // isn't, fall back to the on-device provider in case Gemini was previously selected.
@@ -106,6 +113,10 @@ export default function App() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+
       <header className="brand">
         <h1>MindEase</h1>
         <p>A private space to check in with yourself.</p>
@@ -131,28 +142,34 @@ export default function App() {
 
       {provider === PROVIDERS.OLLAMA ? (
         <p className="privacy-note on-device" role="note">
-          🔒 Private &amp; on-device — your entries never leave this browser.
+          <span aria-hidden="true">🔒 </span>Private &amp; on-device — your entries never leave this
+          browser.
         </p>
       ) : (
         <p className="privacy-note cloud" role="note">
-          ☁️ Using Google Gemini (cloud): the text you write is sent to Google for this check-in.
-          Switch back to <strong>Local · private</strong> to stay fully on-device.
+          <span aria-hidden="true">☁️ </span>Using Google Gemini (cloud): the text you write is sent
+          to Google for this check-in. Switch back to <strong>Local · private</strong> to stay fully
+          on-device.
         </p>
       )}
 
-      <main>
+      <main id="main" tabIndex={-1}>
         {tab === 'checkin' && (
           <>
             {!result && <CheckIn onReflect={handleReflect} busy={busy} />}
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-            {result?.kind === 'safety' && <SafetyCard onReset={reset} />}
-            {result?.kind === 'support' && (
-              <SupportCard analysis={result.analysis} onReset={reset} />
-            )}
+
+            {/* The async outcome lands here; aria-live announces it and we focus it on appear. */}
+            <div ref={resultRef} tabIndex={-1} aria-live="polite" className="result-region">
+              {error && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+              {result?.kind === 'safety' && <SafetyCard onReset={reset} />}
+              {result?.kind === 'support' && (
+                <SupportCard analysis={result.analysis} onReset={reset} />
+              )}
+            </div>
           </>
         )}
 

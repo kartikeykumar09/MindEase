@@ -22,13 +22,13 @@ export default function MoodChart({ series }) {
   const fmt = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
   return (
-    <figure style={{ margin: 0 }}>
+    <figure className="chart">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
         role="img"
         aria-label={`Mood over your last ${n} check-ins, on a scale of 1 to 5.`}
-        style={{ maxWidth: '100%' }}
+        className="chart-svg"
       >
         {/* gridlines for moods 1-5 */}
         {[1, 2, 3, 4, 5].map((m) => (

@@ -35,6 +35,8 @@ therapist, it routes you to help.
   Your words are sent only to software running on your own machine — **data never leaves the device**.
 - Clearing your browser data clears your journal. Nobody else can read it.
 
+See [SECURITY.md](SECURITY.md) for the full data-handling and threat model.
+
 ### Optional: Gemini (cloud) provider
 
 MindEase has an **AI-engine toggle**: **Local · private** (default) or **Gemini · cloud**. The

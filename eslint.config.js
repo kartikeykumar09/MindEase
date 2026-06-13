@@ -39,14 +39,15 @@ export default [
     },
   },
 
-  // Tests.
+  // Tests (logic + component render tests).
   {
-    files: ['**/*.test.js'],
+    files: ['**/*.test.{js,jsx}'],
     ...js.configs.recommended,
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: { ...globals.node, ...globals.browser },
+      parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
 ]

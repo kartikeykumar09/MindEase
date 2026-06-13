@@ -93,7 +93,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), geminiProxy(env)],
     test: {
-      environment: 'node',
+      globals: true,
+      environment: 'node', // component tests opt into jsdom via a per-file pragma
+      setupFiles: ['./src/test/setup.js'],
     },
   }
 })

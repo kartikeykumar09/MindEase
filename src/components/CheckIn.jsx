@@ -30,7 +30,7 @@ export default function CheckIn({ onReflect, busy }) {
     <form className="card" onSubmit={handleSubmit} aria-labelledby="checkin-title">
       <h2 id="checkin-title">How are you feeling right now?</h2>
 
-      <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+      <fieldset className="mood-fieldset">
         <legend className="sr-only">Select your mood from 1 (awful) to 5 (great)</legend>
         <div className="mood-row" role="group" aria-label="Mood rating">
           {MOODS.map((m) => (
@@ -60,7 +60,7 @@ export default function CheckIn({ onReflect, busy }) {
         placeholder="Today I felt…"
       />
 
-      <div style={{ marginTop: '1rem' }}>
+      <div className="checkin-actions">
         <button className="btn-primary" type="submit" disabled={!canSubmit}>
           {busy ? 'Reflecting…' : 'Reflect'}
         </button>

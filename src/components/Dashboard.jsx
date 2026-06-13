@@ -30,7 +30,7 @@ export default function Dashboard({ entries }) {
           <ul className="stat-list" aria-label="Recurring triggers by frequency">
             {triggers.map(({ tag, count }) => (
               <li key={tag}>
-                <span style={{ minWidth: '8rem' }}>{tag}</span>
+                <span className="tag-name">{tag}</span>
                 <span
                   className="bar"
                   style={{ width: `${(count / max) * 60}%` }}
