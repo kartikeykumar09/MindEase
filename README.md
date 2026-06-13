@@ -30,10 +30,24 @@ therapist, it routes you to help.
 ## 🔒 Privacy by design (on-device)
 
 - Journal entries are stored **only** in your browser's `localStorage`. There is **no backend, no
-  account, no cloud database, no analytics, and no third-party calls**.
-- AI runs on a **local** [Ollama](https://ollama.com) model at `http://localhost:11434`. Your words
-  are sent only to software running on your own machine — **data never leaves the device**.
+  account, no cloud database, and no analytics**.
+- By default, AI runs on a **local** [Ollama](https://ollama.com) model at `http://localhost:11434`.
+  Your words are sent only to software running on your own machine — **data never leaves the device**.
 - Clearing your browser data clears your journal. Nobody else can read it.
+
+### Optional: Gemini (cloud) provider
+
+MindEase has an **AI-engine toggle**: **Local · private** (default) or **Gemini · cloud**. The
+on-device option is the recommended, privacy-preserving default. Gemini is available only for
+comparison and only if you opt in:
+
+- Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) (it starts with
+  `AIza`), and set `GEMINI_API_KEY` in your local `.env` (gitignored — never committed).
+- The key is read **server-side** by a small Vite dev-server proxy (`/api/gemini`); it is never
+  bundled into the browser code.
+- ⚠️ **Choosing Gemini sends your journal text to Google's servers** — this is *not* on-device. The
+  UI shows a clear banner whenever the cloud engine is active. Switch back to **Local · private** to
+  stay fully on-device.
 
 ## 🆘 Safety model
 

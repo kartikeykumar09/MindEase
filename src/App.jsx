@@ -5,8 +5,12 @@ import SupportCard from './components/SupportCard.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import HistoryList from './components/HistoryList.jsx'
 import Footer from './components/Footer.jsx'
+import ProviderToggle from './components/ProviderToggle.jsx'
 import { loadEntries, saveEntry, updateEntry } from './lib/storage.js'
-import { triage, analyze } from './lib/model.js'
+import { triage, analyze, PROVIDERS } from './lib/model.js'
+import { geminiConfigured } from './lib/providers/gemini.js'
+
+const PROVIDER_KEY = 'mindease.provider'
 
 /**
  * Root component and flow state machine.
@@ -22,11 +26,32 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null) // { kind: 'support'|'safety', analysis? }
   const [error, setError] = useState('')
+  const [provider, setProvider] = useState(
+    () => localStorage.getItem(PROVIDER_KEY) || PROVIDERS.OLLAMA,
+  )
+  const [geminiAvailable, setGeminiAvailable] = useState(false)
 
   // Keep the document title calm and static.
   useEffect(() => {
     document.title = 'MindEase — your private calm space'
   }, [])
+
+  // Find out whether the optional Gemini provider is configured (key set server-side).
+  useEffect(() => {
+    geminiConfigured().then(setGeminiAvailable)
+  }, [])
+
+  // If Gemini was previously selected but is no longer available, fall back to on-device.
+  useEffect(() => {
+    if (provider === PROVIDERS.GEMINI && !geminiAvailable) setProvider(PROVIDERS.OLLAMA)
+  }, [provider, geminiAvailable])
+
+  /** Persist + apply a provider choice. */
+  function changeProvider(p) {
+    setProvider(p)
+    localStorage.setItem(PROVIDER_KEY, p)
+    reset()
+  }
 
   /**
    * Save the entry, run safety triage FIRST, then (only if safe) generate support.
@@ -41,7 +66,7 @@ export default function App() {
 
     try {
       // PASS 1 — safety triage. Always first.
-      const { risk, reason } = await triage(text)
+      const { risk } = await triage(text, provider)
 
       if (risk === 'crisis' || risk === 'elevated') {
         updateEntry(saved.id, { risk, analysis: null })
@@ -51,14 +76,16 @@ export default function App() {
       }
 
       // PASS 2 — support, only when risk is "none".
-      const analysis = await analyze(mood, text)
+      const analysis = await analyze(mood, text, provider)
       updateEntry(saved.id, { risk: 'none', analysis })
       setEntries(loadEntries())
       setResult({ kind: 'support', analysis })
     } catch (err) {
-      // Ollama unreachable or errored. The entry is still saved.
+      // Model unreachable or errored. The entry is still saved.
       setError(
-        "Couldn't reach the local model. Make sure Ollama is running (ollama serve) and try again. Your entry was saved.",
+        provider === PROVIDERS.GEMINI
+          ? `Couldn't reach Gemini. Check your GEMINI_API_KEY and network. Your entry was saved. (${err?.message || 'error'})`
+          : "Couldn't reach the local model. Make sure Ollama is running (ollama serve) and try again. Your entry was saved.",
       )
       setEntries(loadEntries())
     } finally {
@@ -90,6 +117,19 @@ export default function App() {
           Patterns
         </button>
       </nav>
+
+      <ProviderToggle provider={provider} onChange={changeProvider} geminiAvailable={geminiAvailable} />
+
+      {provider === PROVIDERS.OLLAMA ? (
+        <p className="privacy-note on-device" role="note">
+          🔒 Private &amp; on-device — your entries never leave this browser.
+        </p>
+      ) : (
+        <p className="privacy-note cloud" role="note">
+          ☁️ Using Google Gemini (cloud): the text you write is sent to Google for this check-in.
+          Switch back to <strong>Local · private</strong> to stay fully on-device.
+        </p>
+      )}
 
       <main>
         {tab === 'checkin' && (

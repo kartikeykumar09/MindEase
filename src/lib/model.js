@@ -1,16 +1,18 @@
 /**
- * Local model calls (Ollama) plus the pure parsing/validation helpers around them.
+ * Model orchestration plus the pure parsing/validation helpers around it.
  *
  * Two passes per entry:
  *   1. triage()  — safety classification, runs FIRST.
  *   2. analyze() — warm support, only when triage risk is "none".
  *
- * Parsing is split out from the network calls so it can be unit-tested without a model.
- * Local models often wrap JSON in prose or code fences, so we extract defensively and,
- * for the safety pass, fail to the SAFER side.
+ * The actual model call is delegated to a provider (on-device Ollama by default, or optional
+ * cloud Gemini). Parsing is split out from the network calls so it can be unit-tested without a
+ * model. Models often wrap JSON in prose or code fences, so we extract defensively and, for the
+ * safety pass, fail to the SAFER side.
  */
-import { MODEL_TAG, OLLAMA_URL } from './constants.js'
 import { TRIAGE_SYSTEM_PROMPT, ANALYSIS_SYSTEM_PROMPT } from './prompts.js'
+import { ollamaChat } from './providers/ollama.js'
+import { geminiChat } from './providers/gemini.js'
 
 const VALID_RISKS = ['none', 'elevated', 'crisis']
 
@@ -84,60 +86,67 @@ export function parseAnalysis(text) {
   const obj = extractJson(text)
   if (!obj) return null
   return {
-    reflection: typeof obj.reflection === 'string' ? obj.reflection : '',
+    reflection: clean(obj.reflection),
     triggers: Array.isArray(obj.triggers)
-      ? obj.triggers.filter((t) => typeof t === 'string').map((t) => t.toLowerCase().trim()).slice(0, 4)
+      ? obj.triggers
+          .filter((t) => typeof t === 'string')
+          .map((t) => clean(t).toLowerCase())
+          .filter(Boolean)
+          .slice(0, 4)
       : [],
     coping: Array.isArray(obj.coping)
       ? obj.coping
           .filter((c) => c && typeof c.title === 'string' && typeof c.how === 'string')
+          .map((c) => ({ title: clean(c.title), how: clean(c.how) }))
+          .filter((c) => c.title && c.how)
           .slice(0, 2)
       : [],
-    encouragement: typeof obj.encouragement === 'string' ? obj.encouragement : '',
+    encouragement: clean(obj.encouragement),
   }
 }
 
 /**
- * Low-level call to the local Ollama chat endpoint with JSON-mode formatting.
+ * Tidy a model-produced string: trim, and strip a stray "<...>" placeholder wrapper that small
+ * models sometimes copy from the prompt template (e.g. "<deep breathing>" -> "deep breathing").
+ * @param {unknown} v
+ * @returns {string}
+ */
+function clean(v) {
+  if (typeof v !== 'string') return ''
+  let s = v.trim()
+  if (s.startsWith('<') && s.endsWith('>')) s = s.slice(1, -1).trim()
+  return s
+}
+
+/** Supported provider ids. */
+export const PROVIDERS = { OLLAMA: 'ollama', GEMINI: 'gemini' }
+
+/**
+ * Dispatch a chat call to the chosen provider with JSON-mode formatting.
+ * @param {('ollama'|'gemini')} provider
  * @param {string} system  System prompt.
  * @param {string} user    User content.
- * @param {number} [temperature=0.4]  Sampling temperature. Triage uses 0 for consistency.
- * @param {number} [maxTokens=256]    Cap on generated tokens — keeps each call short so a small
- *   local model can't run away and stall a low-powered machine.
+ * @param {number} temperature  Sampling temperature. Triage uses 0 for consistency.
+ * @param {number} maxTokens    Cap on generated tokens — keeps each call short so a small local
+ *   model can't run away and stall a low-powered machine.
  * @returns {Promise<string>} The raw assistant message content.
  * @throws if the model is unreachable or returns a non-OK status.
  */
-async function chat(system, user, temperature = 0.4, maxTokens = 256) {
-  const res = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL_TAG,
-      format: 'json',
-      stream: false,
-      // keep_alive unloads the model promptly after use to free memory.
-      keep_alive: '2m',
-      options: { temperature, num_predict: maxTokens },
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-    }),
-  })
-  if (!res.ok) throw new Error(`Ollama responded ${res.status}`)
-  const data = await res.json()
-  return data?.message?.content ?? ''
+function chat(provider, system, user, temperature, maxTokens) {
+  const fn = provider === PROVIDERS.GEMINI ? geminiChat : ollamaChat
+  return fn(system, user, temperature, maxTokens)
 }
 
 /**
  * PASS 1 — classify crisis risk. Always run this first.
  * @param {string} text Journal entry.
+ * @param {('ollama'|'gemini')} [provider='ollama']
  * @returns {Promise<{risk: 'none'|'elevated'|'crisis', reason: string}>}
  */
-export async function triage(text) {
+export async function triage(text, provider = PROVIDERS.OLLAMA) {
   // temperature 0 — safety classification should be as consistent as possible.
   // 80 tokens is plenty for {risk, reason} and keeps this fast on small machines.
-  const raw = await chat(TRIAGE_SYSTEM_PROMPT, text, 0, 80)
+  const raw = await chat(provider, TRIAGE_SYSTEM_PROMPT, text, 0, 80)
   return parseTriage(raw)
 }
 
@@ -145,9 +154,11 @@ export async function triage(text) {
  * PASS 2 — generate warm support. Only call when triage risk is "none".
  * @param {number} mood Mood rating 1-5.
  * @param {string} text Journal entry.
+ * @param {('ollama'|'gemini')} [provider='ollama']
  * @returns {Promise<ReturnType<typeof parseAnalysis>>}
  */
-export async function analyze(mood, text) {
-  const raw = await chat(ANALYSIS_SYSTEM_PROMPT, `Mood (1-5): ${mood}\n\nJournal entry:\n${text}`)
+export async function analyze(mood, text, provider = PROVIDERS.OLLAMA) {
+  // 512 tokens fits a full reflection + coping without truncating the closing JSON brace.
+  const raw = await chat(provider, ANALYSIS_SYSTEM_PROMPT, `Mood (1-5): ${mood}\n\nJournal entry:\n${text}`, 0.4, 512)
   return parseAnalysis(raw)
 }

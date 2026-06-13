@@ -76,6 +76,58 @@ body {
   border-color: var(--accent);
 }
 
+/* Provider toggle */
+.provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 0.75rem;
+}
+.provider-label {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.segmented {
+  display: inline-flex;
+  border: 2px solid var(--calm);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.segmented button {
+  font-size: 0.95rem;
+  padding: 0.45rem 0.9rem;
+  border: none;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.segmented button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.segmented button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.privacy-note {
+  text-align: center;
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+}
+.privacy-note.on-device {
+  color: var(--ink-soft);
+}
+.privacy-note.cloud {
+  color: var(--safe-ink);
+  background: var(--safe-bg);
+  border: 1px solid var(--safe-border);
+}
+
 /* Cards */
 .card {
   background: var(--surface);

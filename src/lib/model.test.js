@@ -86,6 +86,25 @@ describe('parseAnalysis', () => {
     expect(parseAnalysis(raw).coping).toHaveLength(1)
   })
 
+  it('strips stray <placeholder> brackets a small model may copy', () => {
+    const raw = JSON.stringify({
+      reflection: '<you sound tired>',
+      triggers: ['<sleep>'],
+      coping: [{ title: '<deep breathing>', how: '<breathe slowly>' }],
+      encouragement: '<keep going>',
+    })
+    const out = parseAnalysis(raw)
+    expect(out.reflection).toBe('you sound tired')
+    expect(out.triggers).toEqual(['sleep'])
+    expect(out.coping[0]).toEqual({ title: 'deep breathing', how: 'breathe slowly' })
+    expect(out.encouragement).toBe('keep going')
+  })
+
+  it('drops coping items missing a real how', () => {
+    const raw = JSON.stringify({ coping: [{ title: 'only a title' }] })
+    expect(parseAnalysis(raw).coping).toEqual([])
+  })
+
   it('returns null when nothing parseable', () => {
     expect(parseAnalysis('garbage')).toBeNull()
   })
